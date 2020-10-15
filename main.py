@@ -56,7 +56,7 @@ def left_plot(ax):
     fig, ax = plt.subplots()
     formatterYY = FuncFormatter(formaterY)
     formaterXX = FuncFormatter(formaterX)
-    ax.set_xticks([x for x in range(0, 500000, 100000)])
+    # ax.set_xticks([x for x in range(0, 500000, 100000)])
 
     ax2 = ax.twiny()
     ax2.set_xticks([x for x in range(0, 240, 40)])
