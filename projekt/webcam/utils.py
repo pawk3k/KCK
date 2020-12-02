@@ -38,14 +38,9 @@ def bb_dia(bb):
 
 def bbinbb(bb1, bb2):
     isin = bb1[0] > bb2[0] and bb1[2] < bb2[2] and bb1[1] > bb2[1] and bb1[3] < bb2[3]
-    if isin:
-        print(bb1, "in", bb2)
-    else:
-        print(bb1, "NOT", bb2)
     return isin
 
 def rinr(r1, r2):
-    print("COMP")
     return bbinbb(r1.bbox, r2.bbox)
 
 def add_text(txt, xy, col=(255, 255, 255), img=None, ax=None, font=cv2.FONT_HERSHEY_SIMPLEX, bg=True):
@@ -58,17 +53,17 @@ def add_text(txt, xy, col=(255, 255, 255), img=None, ax=None, font=cv2.FONT_HERS
     cv2.putText(img, txt, (x, y), font, 1, col, 2)
     pass
 
-def bbbound(bb, img, ofs=[0, 0], col=None):
+def bbbound(bb, img, ofs=[0, 0], col=None, th=3):
     x, w, h = bbxywh(bb)
     if col is None: col = ra()
     ix, iy = ofs[0]+x[0], ofs[1]+x[1]
     x1, y1 = ix+w, iy+h
-    cv2.rectangle(img,(ix,iy),(x1,y1), col,3)
+    cv2.rectangle(img,(ix,iy),(x1,y1), col,th)
     return col
 
-def regbound(r, img, ofs=[0, 0], col=None):
+def regbound(r, img, ofs=[0, 0], col=None, th=3):
     bb = r.bbox
-    return bbbound(bb, img, ofs=ofs, col=col)
+    return bbbound(bb, img, ofs=ofs, col=col, th=th)
 
 
 def touches_border(b, bor, sl=1):

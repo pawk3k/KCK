@@ -182,15 +182,15 @@ def mark_dots(sub, img, ofs=(0, 0)):
 
     img[ofs[1]:ofs[1]+iw, ofs[0]:ofs[0]+ih] = ovl
 
-    rp = regionprops(label(sub, background=255))
+    rp = regionprops(label(res, background=0))
 
     # min_a = 0.0015*iw*ih
     # max_a = 0.05*iw*ih
     # rp2 = list(filter(lambda r1: not touches_border(r1.bbox, (0, 0, ih, iw)) 
     #                     and min_a < bb_ar(r1.bbox) < max_a , rp))
 
-    # for r in rp2:
-    #     regbound(r, img, ofs=ofs)
+    for r in rp:
+        regbound(r, img, ofs=ofs, col=(0, 0, 255), th=1)
 
 
 
