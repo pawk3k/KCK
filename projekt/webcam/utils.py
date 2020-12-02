@@ -11,8 +11,17 @@ def scol():
     _lh += 0.15
     return c
 
+def adim(x):
+    return np.expand_dims(x, -1)
+
+# matplotlib
 def bbxywh(bb):
     return (bb[1], bb[0]), bb[3]-bb[1], bb[2]-bb[0]
+
+
+def bbxywh2(bb):
+    return (bb[0], bb[1]), bb[2]-bb[0], bb[3]-bb[1]
+
 def bbctr(bb):
     xy, w, h = bbxywh(bb)
     return (xy[0]+w/2, xy[1]+h/2)
@@ -22,6 +31,22 @@ def bb_aspect(bb):
 def bb_ar(bb):
     _, w, h = bbxywh(bb)
     return w*h
+def bb_dia(bb):
+    _, w, h = bbxywh(bb)
+    return np.sqrt(w*h)
+
+
+def bbinbb(bb1, bb2):
+    isin = bb1[0] > bb2[0] and bb1[2] < bb2[2] and bb1[1] > bb2[1] and bb1[3] < bb2[3]
+    if isin:
+        print(bb1, "in", bb2)
+    else:
+        print(bb1, "NOT", bb2)
+    return isin
+
+def rinr(r1, r2):
+    print("COMP")
+    return bbinbb(r1.bbox, r2.bbox)
 
 def add_text(txt, xy, col=(255, 255, 255), img=None, ax=None, font=cv2.FONT_HERSHEY_SIMPLEX, bg=True):
     x, y = int(xy[0]), int(xy[1])
@@ -33,13 +58,58 @@ def add_text(txt, xy, col=(255, 255, 255), img=None, ax=None, font=cv2.FONT_HERS
     cv2.putText(img, txt, (x, y), font, 1, col, 2)
     pass
 
-def regbound(r, img, ofs=[0, 0], col=None):
-    bb = r.bbox
+def bbbound(bb, img, ofs=[0, 0], col=None):
     x, w, h = bbxywh(bb)
     if col is None: col = ra()
     ix, iy = ofs[0]+x[0], ofs[1]+x[1]
     x1, y1 = ix+w, iy+h
     cv2.rectangle(img,(ix,iy),(x1,y1), col,3)
     return col
+
+def regbound(r, img, ofs=[0, 0], col=None):
+    bb = r.bbox
+    return bbbound(bb, img, ofs=ofs, col=col)
+
+
 def touches_border(b, bor, sl=1):
     return b[0] <= bor[0]+sl or b[1] <= bor[1]+sl or b[2] >= bor[2]-sl or b[3] >= bor[3]-sl
+
+
+def crop1(img, xy, w, h):
+        return img[xy[1]:xy[1]+h, xy[0]:xy[0]+w]
+
+def tcrop1(img, xy, w, h):
+    return crop1(img, (xy[1], xy[0]), h, w)
+
+def crop2(img, x0, y0, x1, y1):
+    w, h = img.shape[:2]
+    x0 = min(max(0, x0), w)
+    x1 = min(max(0, x1), w)
+    y0 = min(max(0, y0), h)
+    y1 = min(max(0, y1), h)
+    return img[x0:x1, y0:y1]
+
+def bbexp(bb, v):
+    return [bb[0]-v, bb[1]-v, bb[2]+v, bb[3]+v]
+
+def bbexp2(bb, dw, dh):
+    return [bb[0]-dw, bb[1]-dh, bb[2]+dw, bb[3]+dh]
+
+def sanit(x0, y0, x1, y1, w, h):
+    x0 = int(min(max(0, x0), w))
+    x1 = int(min(max(0, x1), w))
+    y0 = int(min(max(0, y0), h))
+    y1 = int(min(max(0, y1), h))
+    return x0, y0, x1, y1
+
+def contr(img, bb, v):
+    i1 = crop2(img, *bb)
+    i2 = crop2(img, *bbexp(bb, v))
+    mask = np.zeros_like(i2)
+    mask[v:-v, v:-v] = 1
+    mask = 1-mask
+    m1 = np.mean(i1)
+    m2 = np.average(i2, weights=mask)
+
+    df = m2 - m1
+    return df

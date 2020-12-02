@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from skimage.color import rgb2gray as r2g
+from skimage.color import rgb2gray as r2g, rgb2hsv as r2h
 import skimage.color as sc
 from skimage.feature import canny
 from skimage.filters import gaussian as gau
@@ -14,6 +14,7 @@ from numpy import unravel_index as urix
 from skimage.measure import find_contours as fc
 from skimage.measure import label, regionprops
 from skimage.filters import threshold_minimum as thm
+from skimage.morphology import convex_hull_image as conhu
 
 font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -104,12 +105,15 @@ def transform(im):
 
     thw = np.percentile(bw1, 95) * 0.8
 
+    # cond0 = np.logical_and(im[:,:,0] > thw, im[:,:,1] > thw, im[:,:,2] > thw)
+
     q = bw1.copy()
 
     q = gau(q, 3)
 
-    q[q<thw] = 0
-    q[q >= thw] = 1
+    q[q < thw] = 0
+    q[cond0] = 1
+    
 
     th = 20
     
@@ -134,38 +138,13 @@ def transform(im):
     _lh = 0
     wh0, wh1 = 3, 20
 
-    def crop1(img, xy, w, h):
-        return img[xy[1]:xy[1]+h, xy[0]:xy[0]+w]
-
-    def crop2(img, x0, y0, x1, y1):
-        w, h = img.shape[:2]
-        x0 = min(max(0, x0), w)
-        x1 = min(max(0, x1), w)
-        y0 = min(max(0, y0), h)
-        y1 = min(max(0, y1), h)
-        return img[x0:x1, y0:y1]
-
-    def bbexp(bb, v):
-        return [bb[0]-v, bb[1]-v, bb[2]+v, bb[3]+v]
-
-    def contr(bb, v):
-        i1 = crop2(bw1, *bb)
-        i2 = crop2(bw1, *bbexp(bb, v))
-        mask = np.zeros_like(i2)
-        mask[v:-v, v:-v] = 1
-        mask = 1-mask
-        m1 = np.mean(i1)
-        m2 = np.average(i2, weights=mask)
-
-        df = m2 - m1
-        #print(m1, m2, df)
-        return df
+    
 
     for r in rp:
         x, w, h = bbxywh(r.bbox)
         ar = w*h
         #if not (wh0 < w < wh1 and wh0 < h < wh1):
-        if ar < 40 or w > wh1 or h > wh1:
+        if ar < 30 or w > wh1 or h > wh1:
             #crgb[x[1]:x[1]+h,x[0]:x[0]+w] = [0,0,0]
             continue
         regbound(r, crgb, col=255*scol())
@@ -186,10 +165,114 @@ def transform(im):
     return crgb, q#np.uint8(c*255)
 
 
+def mark_dots(sub, img, ofs=(0, 0)):
+    iw, ih = sub.shape
+    # try:
+    #     th = thm(sub)
+    # except RuntimeError:
+    #     return
+    # sub = np.uint8(255*(sub > th))
+    #vth = 0.2
+    #sub[sub < vth] = 0
+    #sub[sub >= vth] = 1
+    bl = sub # gau(sub, 4)
+    res = canny(bl, sigma=0.5)
+
+    ovl = np.repeat(adim(res), 3, -1)
+
+    img[ofs[1]:ofs[1]+iw, ofs[0]:ofs[0]+ih] = ovl
+
+    rp = regionprops(label(sub, background=255))
+
+    # min_a = 0.0015*iw*ih
+    # max_a = 0.05*iw*ih
+    # rp2 = list(filter(lambda r1: not touches_border(r1.bbox, (0, 0, ih, iw)) 
+    #                     and min_a < bb_ar(r1.bbox) < max_a , rp))
+
+    # for r in rp2:
+    #     regbound(r, img, ofs=ofs)
+
+
+
+
+def transform2(im):
+    bw = r2g(im)
+    iw, ih = bw.shape
+    
+    bl = gau(bw, 3)
+    c = canny(bl, 4)
+    c = np.uint8(255*c)
+
+    la = label(c, background=0)
+    rp = regionprops(la)
+
+    img = sc.gray2rgb(bw)
+
+    def is_white(r):
+        x, w, h = bbxywh(r.bbox)
+        
+        cr = crop1(im, x, w, h)
+        subi = crop1(c, x, w, h)
+        subbw = crop1(bw, x, w, h)
+        mask = conhu(subi)
+        mask[subbw < 0.3] = 0
+        wei = mask.flatten()
+        
+        try:
+            mc = np.average(cr.reshape((-1, 3)), 0, wei)/255
+        except ZeroDivisionError:
+            return False
+        
+        hsv = r2h(mc)
+        return hsv[1] < 0.4 and hsv[2] > 0.7
+
+    rp = filter(lambda r: is_white(r) and bb_ar(r.bbox) < iw*ih/8, rp)
+    rp = list(rp)
+
+    def in_sth(r):
+        for r1 in rp:
+            if r1 is not r:
+                if rinr(r, r1):
+                    return True
+        return False
+    rp2 = []
+
+    for r in rp:
+        if not in_sth(r):
+            rp2.append(r)
+
+    rp = rp2
+
+    for r in rp:
+        x, w, h = bbxywh(r.bbox)
+
+        if w < h:
+            dw = (h-w)/2
+            dh = 0
+        else:
+            dh = (w-h)/2
+            dw = 0
+        na = max(w, h)
+
+        nbb = bbexp2(r.bbox, dh+na/8, dw+na/8)
+        nbb = sanit(*nbb, iw, ih)
+        nx, nw, nh = bbxywh(nbb)
+
+        bbbound(nbb, img, col=(255,0,2525))
+        sub = bw[nx[1]:nx[1]+nh, nx[0]:nx[0]+nw]
+
+        mark_dots(sub, img, ofs=nx)
+
+        #img[x[1]:x[1]+h,x[0]:x[0]+w] = mc
+        #img[nx[1]:nx[1]+nh,nx[0]:nx[0]+nw] = mc
+        # regbound(r, img, col=(255, 0, 255))
+    #img = sc.gray2rgb(bw)
+    return img
+
 if __name__=="__main__":
     cv2.namedWindow("preview")
-    cv2.namedWindow("bw1")
-    vc = cv2.VideoCapture(2)
+    #cv2.namedWindow("bw1")
+    vc = cv2.VideoCapture(0)
 
     if vc.isOpened(): # try to get the first frame
         rval, frame = vc.read()
@@ -199,10 +282,10 @@ if __name__=="__main__":
 
     while rval:
         
-        tr, ex = transform(frame)
+        tr = transform2(frame)
         #tr, ex = process(frame)
         cv2.imshow("preview", tr)
-        cv2.imshow("bw1", ex)
+        #cv2.imshow("bw1", ex)
         rval, frame = vc.read()
         key = cv2.waitKey(20)
         if key == 27: # exit on ESC
