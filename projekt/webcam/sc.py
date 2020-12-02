@@ -23,7 +23,10 @@ def label_cluster(img, x, cx, cy, lbl, fs=25, col=(255,255,255)):
     #ax.text(cx+x[0]-fs/2, cy+x[1], lbl, color=col, fontsize=fs, fontweight='bold')
     add_text(lbl, (cx+x[0]-fs/2, cy+x[1]), col, img)
 
+IMG_IX = 0
+
 def mark_dots(sub, img, ofs=(0, 0)):
+    global IMG_IX
     iw, ih = sub.shape
     # try:
     #     th = thm(sub)
@@ -73,15 +76,52 @@ def mark_dots(sub, img, ofs=(0, 0)):
         asp = w/h
     
     def is_black(r):
+        global IMG_IX
         x, w, h = bbxywh(r.bbox)
-        cr = crop1(sub, x, w, h)
-        return np.percentile(cr, 20) < 0.2
+        if w < 2 or h < 2:
+            return 0
+        nbb = bbxywh(sanit(*bbexp(r.bbox, 5), iw, ih))
+        nx, nw, nh = nbb
+        cr1 = crop1(res, x, w, h)
+        cr = crop1(res, *nbb)
+        crbw = crop1(sub, *nbb)
+        mask1 = conhu(cr1)
+        mask = cr
 
-    for r in rp:
-        regbound(r, img, ofs=ofs, col=(255, 255, 0), th=1)
+        dx = (x[0]-nx[0], x[1] - nx[1])
 
-    rp2 = list(filter(lambda r1: not touches_border(r1.bbox, (0, 0, ih, iw)) 
-                        and is_black(r1) , rp))
+        mask[dx[1]:dx[1]+h, dx[0]:dx[0]+w] = mask1
+        
+        # print((x, w, h), nbb)
+
+        # io.imsave("sub/cr.png", np.uint8(255*cr))
+        # io.imsave("sub/cr1.png", np.uint8(255*mask))
+        # input()
+        # IMG_IX += 1
+        
+
+        try:
+            cb = np.average(crbw, weights=mask)
+            cw = np.average(crbw, weights=1-mask)
+        except Exception:
+            print("FALSE")
+            return False
+        #print(cb, cw)
+        return cw-cb > 0.1
+
+    def is_dot(r):
+        _, w, h = bbxywh(r.bbox)
+        if w*h > 0.3*ar:
+            return False
+        # max_asp = 1.2
+        # if not (1/max_asp < w/h < max_asp):
+        #     return False
+        return not touches_border(r.bbox, (0, 0, ih, iw)) and is_black(r)
+
+    # for r in rp:
+    #     regbound(r, img, ofs=ofs, col=(255, 255, 0), th=1)
+
+    rp2 = list(filter(is_dot, rp))
 
     for r in rp2:
         regbound(r, img, ofs=ofs, col=(0, 0, 255), th=2)
@@ -100,7 +140,7 @@ def transform2(im):
     la = label(c, background=0)
     rp = regionprops(la)
 
-    img = sc.gray2rgb(bw)
+    img = im.copy() #sc.gray2rgb(bw)
 
     def is_white(r):
         x, w, h = bbxywh(r.bbox)
@@ -152,7 +192,7 @@ def transform2(im):
         nbb = sanit(*nbb, iw, ih)
         nx, nw, nh = bbxywh(nbb)
 
-        bbbound(nbb, img, col=(255,0,2525))
+        #bbbound(nbb, img, col=(255,0,2525))
         sub = bw[nx[1]:nx[1]+nh, nx[0]:nx[0]+nw]
 
         mark_dots(sub, img, ofs=nx)
@@ -161,16 +201,25 @@ def transform2(im):
         #img[nx[1]:nx[1]+nh,nx[0]:nx[0]+nw] = mc
         # regbound(r, img, col=(255, 0, 255))
     #img = sc.gray2rgb(bw)
+    #ii =  np.uint8(255*img)
+    #print(ii.shape)
     return img
 
-def showImage():
+def showImage(fname="im2.png"):
     cv2.namedWindow("preview")
 
-    frame = io.imread("out.jpg")
+    frame = io.imread(fname)
     tr = transform2(frame)
     cv2.imshow("preview", tr)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+import os
+def next_index(fmt):
+    i = 1
+    while os.path.isfile(fmt % i):
+        i += 1
+    return i
 
 def showStream():
     cv2.namedWindow("preview")
@@ -189,12 +238,23 @@ def showStream():
         #tr, ex = process(frame)
         cv2.imshow("preview", tr)
         #cv2.imshow("bw1", ex)
-        rval, frame = vc.read()
+
         key = cv2.waitKey(20)
         if key == 27: # exit on ESC
             break
+        if key == 112:
+            frame, tr = [cv2.cvtColor(im_cv, cv2.COLOR_BGR2RGB) for im_cv in [frame, tr]]
+            fmt = "res/im%03d.jpg"
+            ix = next_index(fmt)
+            io.imsave(fmt % ix, frame)
+            io.imsave("res/im%03d_res.jpg" % ix, tr)
+
+        rval, frame = vc.read()
+        
+        
     cv2.destroyWindow("preview")
 
 if __name__=="__main__":
-    showImage()
+    showStream()
+    #howImage("res/im001.jpg")
     
