@@ -15,6 +15,7 @@ from skimage.measure import find_contours as fc
 from skimage.measure import label, regionprops
 from skimage.filters import threshold_minimum as thm
 from skimage.morphology import convex_hull_image as conhu
+from skimage import io
 
 font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -33,30 +34,57 @@ def mark_dots(sub, img, ofs=(0, 0)):
     #sub[sub < vth] = 0
     #sub[sub >= vth] = 1
     bl = sub # gau(sub, 4)
-    res = canny(bl, sigma=0.5)
+    res = canny(bl, sigma=1)
+
+    res = closing(res)
 
     ovl = np.repeat(adim(res), 3, -1)
 
-    img[ofs[1]:ofs[1]+iw, ofs[0]:ofs[0]+ih] = ovl
+    #img[ofs[1]:ofs[1]+iw, ofs[0]:ofs[0]+ih] = ovl
 
-    #rp = regionprops(label(res, background=0))
+    rp = regionprops(label(res, background=0))
 
-    rsub = np.sqrt(iw*ih)
+    rsub = np.sqrt(iw*ih)/2
 
-    r0 = int(rsub*0.1)
-    r1 = int(rsub*0.2)
-    rx = np.arange(r0, r1)
+    # r0 = int(rsub*0.12)
+    # r1 = int(rsub*0.14)
+    # rx = np.arange(r0, r1)
+    # hcr = hc(res, rx)
+
+    # cth = 0.5
+    # hcr[hcr < cth] = 0
+
+    # _, cx, cy, ri = hcp(hcr, rx, 5, 5, 0.37, total_num_peaks=10)
+
+    # #print("CNT", len(ri))
+
+    # for x, y, r in zip(cx, cy, ri):
+    #     cv2.circle(img, (x+ofs[0],y+ofs[1]), r, (0, 255, 0), 2)
 
 
 
+    ar = iw*ih
+    min_a = 0.0015*ar
+    max_a = 0.04*ar
 
-    # min_a = 0.0015*iw*ih
-    # max_a = 0.05*iw*ih
-    # rp2 = list(filter(lambda r1: not touches_border(r1.bbox, (0, 0, ih, iw)) 
-    #                     and min_a < bb_ar(r1.bbox) < max_a , rp))
+    def size_ok(bb):
+        _, w, h = bbxywh(bb)
+        ar = w*h
+        asp = w/h
+    
+    def is_black(r):
+        x, w, h = bbxywh(r.bbox)
+        cr = crop1(sub, x, w, h)
+        return np.percentile(cr, 20) < 0.2
 
     for r in rp:
-        regbound(r, img, ofs=ofs, col=(0, 0, 255), th=1)
+        regbound(r, img, ofs=ofs, col=(255, 255, 0), th=1)
+
+    rp2 = list(filter(lambda r1: not touches_border(r1.bbox, (0, 0, ih, iw)) 
+                        and is_black(r1) , rp))
+
+    for r in rp2:
+        regbound(r, img, ofs=ofs, col=(0, 0, 255), th=2)
 
 
 
@@ -135,7 +163,16 @@ def transform2(im):
     #img = sc.gray2rgb(bw)
     return img
 
-if __name__=="__main__":
+def showImage():
+    cv2.namedWindow("preview")
+
+    frame = io.imread("out.jpg")
+    tr = transform2(frame)
+    cv2.imshow("preview", tr)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def showStream():
     cv2.namedWindow("preview")
     #cv2.namedWindow("bw1")
     vc = cv2.VideoCapture(0)
@@ -157,3 +194,7 @@ if __name__=="__main__":
         if key == 27: # exit on ESC
             break
     cv2.destroyWindow("preview")
+
+if __name__=="__main__":
+    showImage()
+    

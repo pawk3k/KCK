@@ -23,7 +23,7 @@ def bbxywh2(bb):
     return (bb[0], bb[1]), bb[2]-bb[0], bb[3]-bb[1]
 
 def bbctr(bb):
-    xy, w, h = bbxywh(bb)
+    xy, w, h = bbxywh2(bb)
     return (xy[0]+w/2, xy[1]+h/2)
 def bb_aspect(bb):
     _, w, h = bbxywh(bb)
@@ -37,11 +37,21 @@ def bb_dia(bb):
 
 
 def bbinbb(bb1, bb2):
-    isin = bb1[0] > bb2[0] and bb1[2] < bb2[2] and bb1[1] > bb2[1] and bb1[3] < bb2[3]
+    isin = bb1[0] >= bb2[0] and bb1[2] <= bb2[2] and bb1[1] >= bb2[1] and bb1[3] <= bb2[3]
     return isin
 
 def rinr(r1, r2):
     return bbinbb(r1.bbox, r2.bbox)
+
+def pinbb(p, bb):
+    return bb[0] < p[0] < bb[2] and bb[1] < p[1] < bb[3]
+
+def rinr2(r1, r2):
+    ctr = bbctr(r1.bbox)
+    isin = pinbb(ctr, r2.bbox)
+    if isin:
+        print("IN")
+    return isin
 
 def add_text(txt, xy, col=(255, 255, 255), img=None, ax=None, font=cv2.FONT_HERSHEY_SIMPLEX, bg=True):
     x, y = int(xy[0]), int(xy[1])
