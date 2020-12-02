@@ -24,7 +24,7 @@ def bbxywh2(bb):
 
 def bbctr(bb):
     xy, w, h = bbxywh2(bb)
-    return (xy[0]+w/2, xy[1]+h/2)
+    return [xy[0]+w/2, xy[1]+h/2]
 def bb_aspect(bb):
     _, w, h = bbxywh(bb)
     return w/h
@@ -34,6 +34,10 @@ def bb_ar(bb):
 def bb_dia(bb):
     _, w, h = bbxywh(bb)
     return np.sqrt(w*h)
+
+def bbwh(bb):
+    _, w, h = bbxywh(bb)
+    return [w, h]
 
 
 def bbinbb(bb1, bb2):
@@ -49,17 +53,15 @@ def pinbb(p, bb):
 def rinr2(r1, r2):
     ctr = bbctr(r1.bbox)
     isin = pinbb(ctr, r2.bbox)
-    if isin:
-        print("IN")
     return isin
 
-def add_text(txt, xy, col=(255, 255, 255), img=None, ax=None, font=cv2.FONT_HERSHEY_SIMPLEX, bg=True):
+def add_text(txt, xy, col=(255, 255, 255), img=None, ax=None, font=cv2.FONT_HERSHEY_SIMPLEX, bdr_col=(0, 0, 0)):
     x, y = int(xy[0]), int(xy[1])
     # if bg:
     #     w = len(txt)*40
     #     h = 20
     #     cv2.rectangle(img, (x, y), (x + w, y + h), (0,0,0), -1)
-    cv2.putText(img, txt, (x, y), font, 1, (0,0,0), 5)
+    cv2.putText(img, txt, (x, y), font, 1, bdr_col, 5)
     cv2.putText(img, txt, (x, y), font, 1, col, 2)
     pass
 
@@ -118,3 +120,10 @@ def contr(img, bb, v):
 
     df = m2 - m1
     return df
+
+def in_sth(r, rp):
+        for r1 in rp:
+            if r1 is not r:
+                if rinr2(r, r1) and bb_ar(r.bbox) < bb_ar(r1.bbox):
+                    return True
+        return False

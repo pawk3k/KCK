@@ -17,6 +17,10 @@ from skimage.filters import threshold_minimum as thm
 from skimage.morphology import convex_hull_image as conhu
 from skimage import io
 
+from grouping import group_dots
+
+import matplotlib.pyplot as plt
+
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 def label_cluster(img, x, cx, cy, lbl, fs=25, col=(255,255,255)):
@@ -25,17 +29,9 @@ def label_cluster(img, x, cx, cy, lbl, fs=25, col=(255,255,255)):
 
 IMG_IX = 0
 
-def mark_dots(sub, img, ofs=(0, 0)):
-    global IMG_IX
+def mark_dots(sub, img, ofs=(0, 0), group=False):
+    global IMG_IX, _lh
     iw, ih = sub.shape
-    # try:
-    #     th = thm(sub)
-    # except RuntimeError:
-    #     return
-    # sub = np.uint8(255*(sub > th))
-    #vth = 0.2
-    #sub[sub < vth] = 0
-    #sub[sub >= vth] = 1
     bl = sub # gau(sub, 4)
     res = canny(bl, sigma=1)
 
@@ -63,8 +59,6 @@ def mark_dots(sub, img, ofs=(0, 0)):
 
     # for x, y, r in zip(cx, cy, ri):
     #     cv2.circle(img, (x+ofs[0],y+ofs[1]), r, (0, 255, 0), 2)
-
-
 
     ar = iw*ih
     min_a = 0.0015*ar
@@ -111,25 +105,36 @@ def mark_dots(sub, img, ofs=(0, 0)):
 
     def is_dot(r):
         _, w, h = bbxywh(r.bbox)
-        if w*h > 0.3*ar:
+        if w*h > 0.3*ar or w*h < 0.005*ar:
             return False
-        # max_asp = 1.2
-        # if not (1/max_asp < w/h < max_asp):
-        #     return False
+        max_asp = 1.2
+        if not (1/max_asp < w/h < max_asp):
+            return False
         return not touches_border(r.bbox, (0, 0, ih, iw)) and is_black(r)
 
     # for r in rp:
     #     regbound(r, img, ofs=ofs, col=(255, 255, 0), th=1)
 
-    rp2 = list(filter(is_dot, rp))
+    rp = list(filter(is_dot, rp))
 
-    for r in rp2:
-        regbound(r, img, ofs=ofs, col=(0, 0, 255), th=2)
+    for r in rp:
+        regbound(r, img, ofs=ofs, col=(255, 255, 0), th=1)
+
+    rp = list(filter(lambda x: not in_sth(x, rp), rp))
+
+
+    # GROUP DOTS
+    if group:
+        group_dots(rp, img, ofs=ofs)
+    else if len(rp):
+        for r in rp:
+            regbound(r, img, ofs=ofs, col=(0, 0, 255), th=2)
+        add_text(str(len(rp)), (ofs[0]+iw/2, ofs[1]+ih/2), img=img)
 
 
 
 
-def transform2(im):
+def transform2(im, group=False):
     bw = r2g(im)
     iw, ih = bw.shape
     
@@ -163,16 +168,11 @@ def transform2(im):
     rp = filter(lambda r: is_white(r) and bb_ar(r.bbox) < iw*ih/8, rp)
     rp = list(rp)
 
-    def in_sth(r):
-        for r1 in rp:
-            if r1 is not r:
-                if rinr(r, r1):
-                    return True
-        return False
+    
     rp2 = []
 
     for r in rp:
-        if not in_sth(r):
+        if not in_sth(r, rp):
             rp2.append(r)
 
     rp = rp2
@@ -195,21 +195,21 @@ def transform2(im):
         #bbbound(nbb, img, col=(255,0,2525))
         sub = bw[nx[1]:nx[1]+nh, nx[0]:nx[0]+nw]
 
-        mark_dots(sub, img, ofs=nx)
+        mark_dots(sub, img, ofs=nx, group=group)
 
         #img[x[1]:x[1]+h,x[0]:x[0]+w] = mc
         #img[nx[1]:nx[1]+nh,nx[0]:nx[0]+nw] = mc
-        # regbound(r, img, col=(255, 0, 255))
+        regbound(r, img, col=(255, 0, 255))
     #img = sc.gray2rgb(bw)
     #ii =  np.uint8(255*img)
     #print(ii.shape)
     return img
 
-def showImage(fname="im2.png"):
+def showImage(fname="im2.png", group=True):
     cv2.namedWindow("preview")
 
     frame = io.imread(fname)
-    tr = transform2(frame)
+    tr = transform2(frame, group=group)
     cv2.imshow("preview", tr)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -234,7 +234,7 @@ def showStream():
 
     while rval:
         
-        tr = transform2(frame)
+        tr = transform2(frame, group=False)
         #tr, ex = process(frame)
         cv2.imshow("preview", tr)
         #cv2.imshow("bw1", ex)
@@ -244,10 +244,10 @@ def showStream():
             break
         if key == 112:
             frame, tr = [cv2.cvtColor(im_cv, cv2.COLOR_BGR2RGB) for im_cv in [frame, tr]]
-            fmt = "res/im%03d.jpg"
+            fmt = "res/im%03d.png"
             ix = next_index(fmt)
             io.imsave(fmt % ix, frame)
-            io.imsave("res/im%03d_res.jpg" % ix, tr)
+            io.imsave("res/im%03d_res.png" % ix, tr)
 
         rval, frame = vc.read()
         
@@ -256,5 +256,5 @@ def showStream():
 
 if __name__=="__main__":
     showStream()
-    #howImage("res/im001.jpg")
+    #showImage("res/im002.png", group=True)
     
