@@ -9,22 +9,27 @@ def group_dots(rp, img, ofs=(0,0)):
     #plt.scatter(px[:0], px[:1])
 
     le = len(px)
-    if le > 1:
+    if le < 2:
+        return False
+    else:
         coef = KMeans(n_clusters=1).fit(px).inertia_
         co_th = 150/le
-        if coef > co_th:
-            ncs = list(range(1, 5))
+        if coef < co_th:
+            return False
+        else:
+            ncs = list(range(1, min(le, 4)))
             iner = []
             for cc in ncs:
                 k = KMeans(n_clusters=cc).fit(px)
                 iner.append(k.inertia_)
             
-
             iner = np.array(iner)
 
-            k = np.where(iner < co_th)[0][0]
-
-            nc = k+1
+            if iner[-1] >= co_th:
+                nc = ncs[-1]
+            else:
+                k = np.where(iner < co_th)[0][0]
+                nc = k+1
             # dif = np.diff(np.diff(iner))
             # nc = np.argmax(dif)+2
 
@@ -46,3 +51,4 @@ def group_dots(rp, img, ofs=(0,0)):
                     regbound(reg, img, ofs=ofs, col=col, th=2)
                 txt = str(len(s))
                 add_text(txt, (ofs[0]+cy, ofs[1]+cx), col=col, img=img, bdr_col=255-col)
+            return True

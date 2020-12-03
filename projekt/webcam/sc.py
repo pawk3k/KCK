@@ -21,6 +21,8 @@ from grouping import group_dots
 
 import matplotlib.pyplot as plt
 
+BOUNDS = True
+
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 def label_cluster(img, x, cx, cy, lbl, fs=25, col=(255,255,255)):
@@ -28,9 +30,10 @@ def label_cluster(img, x, cx, cy, lbl, fs=25, col=(255,255,255)):
     add_text(lbl, (cx+x[0]-fs/2, cy+x[1]), col, img)
 
 IMG_IX = 0
+MODE = 0
 
 def mark_dots(sub, img, ofs=(0, 0), group=False):
-    global IMG_IX, _lh
+    global IMG_IX, _lh, MODE
     iw, ih = sub.shape
     bl = sub # gau(sub, 4)
     res = canny(bl, sigma=1)
@@ -98,7 +101,7 @@ def mark_dots(sub, img, ofs=(0, 0), group=False):
             cb = np.average(crbw, weights=mask)
             cw = np.average(crbw, weights=1-mask)
         except Exception:
-            print("FALSE")
+            #print("FALSE")
             return False
         #print(cb, cw)
         return cw-cb > 0.1
@@ -107,9 +110,10 @@ def mark_dots(sub, img, ofs=(0, 0), group=False):
         _, w, h = bbxywh(r.bbox)
         if w*h > 0.3*ar or w*h < 0.005*ar:
             return False
-        max_asp = 1.2
-        if not (1/max_asp < w/h < max_asp):
-            return False
+        if MODE == 0 and group == False:
+            max_asp = 1.2
+            if not (1/max_asp < w/h < max_asp):
+                return False
         return not touches_border(r.bbox, (0, 0, ih, iw)) and is_black(r)
 
     # for r in rp:
@@ -122,16 +126,17 @@ def mark_dots(sub, img, ofs=(0, 0), group=False):
 
     rp = list(filter(lambda x: not in_sth(x, rp), rp))
 
-
+    regrouped = False
     # GROUP DOTS
     if group:
-        group_dots(rp, img, ofs=ofs)
-    else if len(rp):
+        regrouped = group_dots(rp, img, ofs=ofs)
+    if not regrouped and len(rp) > 0:
         for r in rp:
             regbound(r, img, ofs=ofs, col=(0, 0, 255), th=2)
         add_text(str(len(rp)), (ofs[0]+iw/2, ofs[1]+ih/2), img=img)
 
-
+    # return number of dots
+    return len(rp)
 
 
 def transform2(im, group=False):
@@ -195,11 +200,13 @@ def transform2(im, group=False):
         #bbbound(nbb, img, col=(255,0,2525))
         sub = bw[nx[1]:nx[1]+nh, nx[0]:nx[0]+nw]
 
-        mark_dots(sub, img, ofs=nx, group=group)
+        ndots = mark_dots(sub, img, ofs=nx, group=group)
 
         #img[x[1]:x[1]+h,x[0]:x[0]+w] = mc
         #img[nx[1]:nx[1]+nh,nx[0]:nx[0]+nw] = mc
-        regbound(r, img, col=(255, 0, 255))
+        if BOUNDS and ndots > 0:
+            #regbound(r, img, col=(255, 0, 255))
+            bbbound((nx[1], nx[0], nx[1]+nh, nx[0]+nw), img, col=(255, 0, 255))
     #img = sc.gray2rgb(bw)
     #ii =  np.uint8(255*img)
     #print(ii.shape)
@@ -211,7 +218,18 @@ def showImage(fname="im2.png", group=True):
     frame = io.imread(fname)
     tr = transform2(frame, group=group)
     cv2.imshow("preview", tr)
-    cv2.waitKey(0)
+    while True:
+        key = cv2.waitKey(20)
+        if key == 114:
+            d = fname.rfind(".")
+            fname = fname[:d]+"_res1"+fname[d:]
+            io.imsave(fname, cv2.cvtColor(tr, cv2.COLOR_BGR2RGB))
+            print("SAVED TO", fname)
+        elif key == 27:
+            break
+        elif key == 105:
+            BOUNDS = not BOUNDS
+
     cv2.destroyAllWindows()
 
 import os
@@ -221,7 +239,8 @@ def next_index(fmt):
         i += 1
     return i
 
-def showStream():
+def showStream(group=False, mode=1):
+    global BOUNDS, MODE
     cv2.namedWindow("preview")
     #cv2.namedWindow("bw1")
     vc = cv2.VideoCapture(0)
@@ -234,7 +253,7 @@ def showStream():
 
     while rval:
         
-        tr = transform2(frame, group=False)
+        tr = transform2(frame, group=group)
         #tr, ex = process(frame)
         cv2.imshow("preview", tr)
         #cv2.imshow("bw1", ex)
@@ -248,6 +267,10 @@ def showStream():
             ix = next_index(fmt)
             io.imsave(fmt % ix, frame)
             io.imsave("res/im%03d_res.png" % ix, tr)
+        elif key == 105:
+            BOUNDS = not BOUNDS
+        else:
+            pass#print(key)
 
         rval, frame = vc.read()
         
@@ -255,6 +278,6 @@ def showStream():
     cv2.destroyWindow("preview")
 
 if __name__=="__main__":
-    showStream()
+    showStream(group=False, mode=0)
     #showImage("res/im002.png", group=True)
     
