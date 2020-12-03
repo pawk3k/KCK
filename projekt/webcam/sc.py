@@ -30,7 +30,7 @@ def label_cluster(img, x, cx, cy, lbl, fs=25, col=(255,255,255)):
     add_text(lbl, (cx+x[0]-fs/2, cy+x[1]), col, img)
 
 IMG_IX = 0
-MODE = 0
+MODE = 1
 
 def mark_dots(sub, img, ofs=(0, 0), group=False):
     global IMG_IX, _lh, MODE
@@ -278,6 +278,6 @@ def showStream(group=False, mode=1):
     cv2.destroyWindow("preview")
 
 if __name__=="__main__":
-    showStream(group=False, mode=0)
-    #showImage("res/im002.png", group=True)
+    #showStream(group=False, mode=1)
+    showImage("res/im032.png", group=True)
     
